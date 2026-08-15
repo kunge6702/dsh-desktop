@@ -1,0 +1,54 @@
+{
+  "name": "dsh-desktop",
+  "version": "0.1.0",
+  "description": "A small, secure Electron shell for the DeepSeek Harness web UI.",
+  "author": "DSH Desktop contributors",
+  "private": true,
+  "type": "module",
+  "main": "main.js",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "check": "node --check main.js && node --check lib/dsh-host.js && node --check lib/navigation-policy.js",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.0-rc.6"
+  },
+  "devDependencies": {
+    "electron": "39.0.0",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "ai.deepseek.dsh.desktop",
+    "productName": "DSH Desktop",
+    "asar": true,
+    "npmRebuild": false,
+    "afterPack": "scripts/after-pack.cjs",
+    "asarUnpack": [
+      "node_modules/**"
+    ],
+    "files": [
+      "main.js",
+      "lib/**/*",
+      "scripts/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Development"
+    }
+  }
+}
