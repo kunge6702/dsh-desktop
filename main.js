@@ -75,7 +75,7 @@ async function resolveWorkspace() {
 }
 
 function appIcon() {
-  const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'assets', 'favicon.svg'));
+  const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'assets', 'favicon.png'));
   return icon.isEmpty() ? nativeImage.createEmpty() : icon;
 }
 

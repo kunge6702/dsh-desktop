@@ -34,6 +34,7 @@
       "assets/**/*",
       "package.json"
     ],
+    "icon": "assets/favicon.png",
     "extraResources": [
       {
         "from": "runtime/node_modules",
@@ -44,17 +45,14 @@
       }
     ],
     "win": {
-      "icon": "assets/favicon.svg",
       "target": "nsis",
       "signAndEditExecutable": false
     },
     "mac": {
-      "icon": "assets/favicon.svg",
       "target": "dmg",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "icon": "assets/favicon.svg",
       "target": "AppImage",
       "category": "Development"
     }
