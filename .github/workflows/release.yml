@@ -47,3 +47,16 @@ jobs:
         run: npm run dist -- --publish always --config.win.signAndEditExecutable=true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attach differential update blockmap
+        run: |
+          $blockmaps = @(Get-ChildItem -Path dist -Filter '*.blockmap')
+          if ($blockmaps.Count -eq 0) {
+            throw 'The build produced no blockmap files.'
+          }
+          foreach ($blockmap in $blockmaps) {
+            gh release upload $env:GITHUB_REF_NAME $blockmap.FullName --clobber
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
