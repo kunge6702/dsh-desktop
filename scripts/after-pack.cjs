@@ -53,6 +53,38 @@ function collectPackageRoots(nodeModulesRoot) {
   return packages;
 }
 
+function resolveInstalledPackage(packageRoot, packageName, boundary) {
+  let cursor = packageRoot;
+  while (true) {
+    const candidate = path.join(cursor, 'node_modules', ...packageName.split('/'), 'package.json');
+    if (fs.statSync(candidate, { throwIfNoEntry: false })?.isFile()) return candidate;
+    if (cursor === boundary) return null;
+    const parent = path.dirname(cursor);
+    if (parent === cursor || path.relative(boundary, parent).startsWith('..')) return null;
+    cursor = parent;
+  }
+}
+
+function assertDependencyClosure(nodeModulesRoot) {
+  const missing = [];
+  const boundary = path.dirname(nodeModulesRoot);
+  for (const packageRoot of collectPackageRoots(nodeModulesRoot)) {
+    const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
+    const required = new Set(Object.keys(manifest.dependencies ?? {}));
+    for (const peer of Object.keys(manifest.peerDependencies ?? {})) {
+      if (!manifest.peerDependenciesMeta?.[peer]?.optional) required.add(peer);
+    }
+    for (const dependency of required) {
+      if (!resolveInstalledPackage(packageRoot, dependency, boundary)) {
+        missing.push(`${manifest.name ?? packageRoot} -> ${dependency}`);
+      }
+    }
+  }
+  if (missing.length) {
+    throw new Error(`Packaged runtime dependency closure is incomplete:\n${missing.sort().join('\n')}`);
+  }
+}
+
 function generateThirdPartyNotices(nodeModulesRoot, outputPath) {
   const records = collectPackageRoots(nodeModulesRoot).map((packageRoot) => {
     const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
@@ -123,13 +155,15 @@ async function afterPack(context) {
   const platform = context.electronPlatformName;
   const arch = Arch[context.arch];
   if (!arch) throw new Error(`Unknown electron-builder architecture: ${context.arch}`);
-  const unpackedRoot = path.join(context.appOutDir, 'resources', 'app.asar.unpacked');
-  assertTargetRuntime(unpackedRoot, platform, arch);
+  const runtimeRoot = path.join(context.appOutDir, 'resources', 'dsh-runtime');
+  assertDependencyClosure(path.join(runtimeRoot, 'node_modules'));
+  assertTargetRuntime(runtimeRoot, platform, arch);
   const noticePath = path.join(context.appOutDir, 'THIRD_PARTY_NOTICES.txt');
-  const packageCount = generateThirdPartyNotices(path.join(unpackedRoot, 'node_modules'), noticePath);
+  const packageCount = generateThirdPartyNotices(path.join(runtimeRoot, 'node_modules'), noticePath);
   if (!packageCount) throw new Error('No runtime packages were found while generating third-party notices.');
 }
 
 module.exports = afterPack;
+module.exports.assertDependencyClosure = assertDependencyClosure;
 module.exports.assertTargetRuntime = assertTargetRuntime;
 module.exports.generateThirdPartyNotices = generateThirdPartyNotices;

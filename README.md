@@ -16,7 +16,7 @@ The selected workspace is stored in Electron's user-data directory. The first la
 
 ## Packaging
 
-Run `npm run dist` on the target platform. The build keeps the application in an asar archive while unpacking native modules and helper files under `node_modules` so `node-pty`, `koffi`, and their platform helpers can be loaded by the embedded DSH process. DSH ships Windows/macOS node-pty prebuilds, so the packager deliberately does not rebuild native modules against Electron; Linux release builders must compile node-pty during `npm install`. An `afterPack` check rejects packages that omit the target platform's frontend, native modules, or PTY helpers.
+Run `npm run dist` on the target platform. Before packaging, a locked production-only install is prepared under `runtime/node_modules` and copied intact to `resources/dsh-runtime`; this avoids Electron packagers pruning DSH's required peer-dependency closure. DSH ships Windows/macOS node-pty prebuilds, so the packager deliberately does not rebuild native modules against Electron; Linux release builders compile node-pty while preparing the runtime. An `afterPack` check rejects packages with missing dependency edges, frontend assets, native modules, or PTY helpers.
 
 Windows executable resource editing is disabled in the default unsigned build so packaging works without Developer Mode's symbolic-link privilege. A signed release should provide its own icon/certificate and enable `win.signAndEditExecutable` in the release configuration.
 

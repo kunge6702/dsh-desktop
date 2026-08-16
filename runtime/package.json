@@ -1,0 +1,9 @@
+{
+  "name": "dsh-desktop-runtime",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Locked production dependency closure embedded in DSH Desktop.",
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.0-rc.6"
+  }
+}

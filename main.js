@@ -25,7 +25,7 @@ function supportedNodeRuntime(version = process.versions.node) {
 
 function dshEntryPath() {
   const relative = path.join('node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
-  if (app.isPackaged) return path.join(process.resourcesPath, 'app.asar.unpacked', relative);
+  if (app.isPackaged) return path.join(process.resourcesPath, 'dsh-runtime', relative);
   return path.join(app.getAppPath(), relative);
 }
 

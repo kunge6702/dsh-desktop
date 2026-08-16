@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A small, secure Electron shell for the DeepSeek Harness web UI.",
   "author": "DSH Desktop contributors",
   "private": true,
@@ -12,13 +12,11 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "check": "node --check main.js && node --check lib/dsh-host.js && node --check lib/navigation-policy.js",
+    "check": "node --check main.js && node --check lib/dsh-host.js && node --check lib/navigation-policy.js && node --check scripts/before-pack.cjs && node --check scripts/after-pack.cjs",
     "dist": "electron-builder"
   },
-  "dependencies": {
-    "@deepseek-ai/dsh": "0.1.0-rc.6"
-  },
   "devDependencies": {
+    "@deepseek-ai/dsh": "0.1.0-rc.6",
     "electron": "39.0.0",
     "electron-builder": "26.0.12"
   },
@@ -27,16 +25,22 @@
     "productName": "DSH Desktop",
     "asar": true,
     "npmRebuild": false,
+    "beforePack": "scripts/before-pack.cjs",
     "afterPack": "scripts/after-pack.cjs",
-    "asarUnpack": [
-      "node_modules/**"
-    ],
     "files": [
       "main.js",
       "lib/**/*",
       "scripts/**/*",
-      "package.json",
-      "node_modules/**/*"
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "runtime/node_modules",
+        "to": "dsh-runtime/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "win": {
       "target": "nsis",
