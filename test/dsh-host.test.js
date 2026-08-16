@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
+import { activateWindow, registerSingleInstance } from '../lib/app-lifecycle.js';
 import { DshHost, DshHostError } from '../lib/dsh-host.js';
 import { installNavigationGuards, isAllowedNavigation } from '../lib/navigation-policy.js';
 
@@ -26,6 +27,38 @@ class FakeChild extends EventEmitter {
     return true;
   }
 }
+
+test('restores, shows, and focuses an existing main window', () => {
+  const calls = [];
+  const window = {
+    isDestroyed: () => false,
+    isMinimized: () => true,
+    restore: () => calls.push('restore'),
+    show: () => calls.push('show'),
+    focus: () => calls.push('focus'),
+  };
+
+  assert.equal(activateWindow(window), true);
+  assert.deepEqual(calls, ['restore', 'show', 'focus']);
+  assert.equal(activateWindow(null), false);
+  assert.equal(activateWindow({ isDestroyed: () => true }), false);
+});
+
+test('registers second-instance activation only for the lock owner', () => {
+  const owner = new EventEmitter();
+  owner.requestSingleInstanceLock = () => true;
+  let activations = 0;
+
+  assert.equal(registerSingleInstance(owner, () => { activations += 1; }), true);
+  owner.emit('second-instance');
+  assert.equal(activations, 1);
+
+  const duplicate = new EventEmitter();
+  duplicate.requestSingleInstanceLock = () => false;
+  assert.equal(registerSingleInstance(duplicate, () => { activations += 1; }), false);
+  duplicate.emit('second-instance');
+  assert.equal(activations, 1);
+});
 
 test('starts DSH with a random loopback port and parses chunked readiness', async () => {
   let invocation;

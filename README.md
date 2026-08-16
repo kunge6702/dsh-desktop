@@ -12,7 +12,7 @@ npm test
 npm start
 ```
 
-The selected workspace is stored in Electron's user-data directory. The first launch creates `Documents/DSH Workspace`; use the tray menu to select another directory.
+The selected workspace is stored in Electron's user-data directory. The first launch creates `Documents/DSH Workspace`; use the tray menu to select another directory. DSH Desktop runs as a single instance: launching it again, clicking its tray icon, or choosing **Show DSH** restores and focuses the existing window.
 
 ## Packaging
 

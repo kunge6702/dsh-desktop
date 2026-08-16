@@ -12,7 +12,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "check": "node --check main.js && node --check lib/dsh-host.js && node --check lib/navigation-policy.js && node --check scripts/before-pack.cjs && node --check scripts/after-pack.cjs",
+    "check": "node --check main.js && node --check lib/app-lifecycle.js && node --check lib/dsh-host.js && node --check lib/navigation-policy.js && node --check scripts/before-pack.cjs && node --check scripts/after-pack.cjs",
     "dist": "electron-builder"
   },
   "devDependencies": {

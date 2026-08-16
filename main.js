@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, Menu, nativeImage, Tray } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { activateWindow, registerSingleInstance } from './lib/app-lifecycle.js';
 import { DshHost, DshHostError } from './lib/dsh-host.js';
 import { installNavigationGuards } from './lib/navigation-policy.js';
 
@@ -16,6 +17,8 @@ let settings = {};
 let startupPromise = null;
 let failurePromise = null;
 let shutdownPromise = null;
+let bootstrapPromise = null;
+let activationPromise = null;
 let quitting = false;
 
 function supportedNodeRuntime(version = process.versions.node) {
@@ -81,7 +84,7 @@ function updateTrayMenu() {
   if (!tray) return;
   const workspace = settings.workspace || '未选择';
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '显示 DSH', click: () => { if (mainWindow) mainWindow.show(); } },
+    { label: '显示 DSH', click: showMainWindow },
     { label: '隐藏窗口', click: () => { if (mainWindow) mainWindow.hide(); } },
     { type: 'separator' },
     { label: `工作区：${path.basename(workspace)}`, enabled: false },
@@ -95,9 +98,8 @@ function updateTrayMenu() {
 function createTray() {
   tray = new Tray(trayIcon());
   tray.setToolTip('DSH Desktop');
-  tray.on('double-click', () => {
-    if (mainWindow) mainWindow.show();
-  });
+  tray.on('click', showMainWindow);
+  tray.on('double-click', showMainWindow);
   updateTrayMenu();
 }
 
@@ -120,7 +122,7 @@ function createWindow() {
 
   installNavigationGuards(window, () => allowedOrigin);
   window.webContents.on('did-finish-load', () => {
-    if (!window.isDestroyed()) window.show();
+    activateWindow(window);
   });
   window.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (isMainFrame && !quitting && startupPromise === null && errorCode !== -3) {
@@ -163,7 +165,7 @@ async function startHostAndLoad({ forceRestart = false } = {}) {
     allowedOrigin = new URL(url).origin;
     const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createWindow();
     await window.loadURL(url);
-    window.show();
+    activateWindow(window);
   })();
   try {
     await startupPromise;
@@ -240,6 +242,23 @@ async function showStartupError(error) {
   });
 }
 
+function showMainWindow() {
+  if (quitting || activateWindow(mainWindow) || activationPromise || !bootstrapPromise) return;
+  activationPromise = bootstrapPromise.then(async () => {
+    if (quitting || activateWindow(mainWindow)) return;
+    try {
+      await startHostAndLoad();
+      activateWindow(mainWindow);
+    } catch (error) {
+      await showStartupError(error);
+    }
+  }, () => {
+    // bootstrap reports its own startup error and quits the application.
+  }).finally(() => {
+    activationPromise = null;
+  });
+}
+
 async function requestQuit() {
   if (shutdownPromise) return shutdownPromise;
   quitting = true;
@@ -273,22 +292,26 @@ async function bootstrap() {
   }
 }
 
-app.on('before-quit', (event) => {
-  if (!quitting) {
-    event.preventDefault();
-    void requestQuit();
-  }
-});
+if (!registerSingleInstance(app, showMainWindow)) {
+  quitting = true;
+  app.quit();
+} else {
+  app.on('before-quit', (event) => {
+    if (!quitting) {
+      event.preventDefault();
+      void requestQuit();
+    }
+  });
 
-app.on('window-all-closed', () => {
-  // DSH Desktop intentionally remains available from the tray.
-});
+  app.on('window-all-closed', () => {
+    // DSH Desktop intentionally remains available from the tray.
+  });
 
-app.whenReady().then(bootstrap).catch(async (error) => {
-  await showStartupError(error);
-  await requestQuit();
-});
+  bootstrapPromise = app.whenReady().then(bootstrap);
+  void bootstrapPromise.catch(async (error) => {
+    await showStartupError(error);
+    await requestQuit();
+  });
 
-app.on('activate', () => {
-  if (!mainWindow && !quitting) void startHostAndLoad().catch(showStartupError);
-});
+  app.on('activate', showMainWindow);
+}
