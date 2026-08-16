@@ -31,6 +31,7 @@
       "main.js",
       "lib/**/*",
       "scripts/**/*",
+      "assets/**/*",
       "package.json"
     ],
     "extraResources": [
@@ -43,14 +44,17 @@
       }
     ],
     "win": {
+      "icon": "assets/favicon.svg",
       "target": "nsis",
       "signAndEditExecutable": false
     },
     "mac": {
+      "icon": "assets/favicon.svg",
       "target": "dmg",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
+      "icon": "assets/favicon.svg",
       "target": "AppImage",
       "category": "Development"
     }

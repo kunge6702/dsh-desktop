@@ -8,7 +8,6 @@ import { installNavigationGuards } from './lib/navigation-policy.js';
 const DSH_VERSION = '0.1.0-rc.6';
 const SETTINGS_FILE = 'settings.json';
 const DEFAULT_WORKSPACE_NAME = 'DSH Workspace';
-const TRAY_ICON_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABQSURBVFhH7c4xCgAgDARBPyr+v/IJ2l9zSoix2INtBMO0PuaqrOnD6wAAAPA/IDq9pwGwgOwAWMDN9O9JACwgOwAWEJ3e0wBYQHYAAAAoB2yY11L4722meAAAAABJRU5ErkJggg==';
 
 let mainWindow = null;
 let tray = null;
@@ -75,8 +74,8 @@ async function resolveWorkspace() {
   return target;
 }
 
-function trayIcon() {
-  const icon = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_BASE64, 'base64'));
+function appIcon() {
+  const icon = nativeImage.createFromPath(path.join(app.getAppPath(), 'assets', 'favicon.svg'));
   return icon.isEmpty() ? nativeImage.createEmpty() : icon;
 }
 
@@ -96,7 +95,7 @@ function updateTrayMenu() {
 }
 
 function createTray() {
-  tray = new Tray(trayIcon());
+  tray = new Tray(appIcon());
   tray.setToolTip('DSH Desktop');
   tray.on('click', showMainWindow);
   tray.on('double-click', showMainWindow);
@@ -112,6 +111,7 @@ function createWindow() {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#0f1117',
+    icon: appIcon(),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
