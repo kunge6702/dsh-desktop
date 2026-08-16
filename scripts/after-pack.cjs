@@ -1,8 +1,12 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const asar = require('@electron/asar');
 const { Arch } = require('builder-util');
+
+const MAX_UNPACKED_RUNTIME_FILES = 500;
 
 const LICENSE_FILE_RE = /^(licen[cs]e|copying|notice)(\..*)?$/i;
 
@@ -151,19 +155,67 @@ function assertTargetRuntime(unpackedRoot, platform, arch) {
   }
 }
 
+function assertOptimizedRuntimeLayout(resourcesRoot, maxLooseFiles = MAX_UNPACKED_RUNTIME_FILES) {
+  const archivePath = path.join(resourcesRoot, 'dsh-runtime.asar');
+  if (!fs.statSync(archivePath, { throwIfNoEntry: false })?.isFile()) {
+    throw new Error('The packaged DSH runtime archive is missing.');
+  }
+  const unpackedRoot = `${archivePath}.unpacked`;
+  const looseFiles = findFiles(unpackedRoot, () => true);
+  if (looseFiles.length > maxLooseFiles) {
+    throw new Error(`The packaged DSH runtime contains ${looseFiles.length} loose files; expected at most ${maxLooseFiles}.`);
+  }
+  return { archivePath, unpackedRoot, looseFileCount: looseFiles.length };
+}
+
+function windowsExecutableResourceOptions(iconPath, appInfo) {
+  return {
+    'version-string': {
+      FileDescription: appInfo.productName,
+      ProductName: appInfo.productName,
+      LegalCopyright: appInfo.copyright,
+      InternalFilename: appInfo.productFilename,
+    },
+    'file-version': appInfo.shortVersion || appInfo.buildVersion,
+    'product-version': appInfo.shortVersionWindows || appInfo.getVersionInWeirdWindowsForm(),
+    icon: iconPath,
+  };
+}
+
+async function editUnsignedWindowsExecutable(context) {
+  if (context.electronPlatformName !== 'win32') return;
+  if (context.packager.platformSpecificBuildOptions.signAndEditExecutable !== false) return;
+  const executablePath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.exe`);
+  const iconPath = await context.packager.getIconPath();
+  if (!iconPath) throw new Error('Cannot edit the Windows executable without an application icon.');
+  const { rcedit } = await import('rcedit');
+  await rcedit(executablePath, windowsExecutableResourceOptions(iconPath, context.packager.appInfo));
+}
+
 async function afterPack(context) {
   const platform = context.electronPlatformName;
   const arch = Arch[context.arch];
   if (!arch) throw new Error(`Unknown electron-builder architecture: ${context.arch}`);
-  const runtimeRoot = path.join(context.appOutDir, 'resources', 'dsh-runtime');
-  assertDependencyClosure(path.join(runtimeRoot, 'node_modules'));
-  assertTargetRuntime(runtimeRoot, platform, arch);
-  const noticePath = path.join(context.appOutDir, 'THIRD_PARTY_NOTICES.txt');
-  const packageCount = generateThirdPartyNotices(path.join(runtimeRoot, 'node_modules'), noticePath);
-  if (!packageCount) throw new Error('No runtime packages were found while generating third-party notices.');
+  const resourcesRoot = path.join(context.appOutDir, 'resources');
+  const { archivePath } = assertOptimizedRuntimeLayout(resourcesRoot);
+  const extractedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-runtime-check-'));
+  try {
+    asar.extractAll(archivePath, extractedRoot);
+    assertDependencyClosure(path.join(extractedRoot, 'node_modules'));
+    assertTargetRuntime(extractedRoot, platform, arch);
+    const noticePath = path.join(context.appOutDir, 'THIRD_PARTY_NOTICES.txt');
+    const packageCount = generateThirdPartyNotices(path.join(extractedRoot, 'node_modules'), noticePath);
+    if (!packageCount) throw new Error('No runtime packages were found while generating third-party notices.');
+    await editUnsignedWindowsExecutable(context);
+  } finally {
+    fs.rmSync(extractedRoot, { recursive: true, force: true });
+  }
 }
 
 module.exports = afterPack;
 module.exports.assertDependencyClosure = assertDependencyClosure;
+module.exports.assertOptimizedRuntimeLayout = assertOptimizedRuntimeLayout;
 module.exports.assertTargetRuntime = assertTargetRuntime;
 module.exports.generateThirdPartyNotices = generateThirdPartyNotices;
+module.exports.MAX_UNPACKED_RUNTIME_FILES = MAX_UNPACKED_RUNTIME_FILES;
+module.exports.windowsExecutableResourceOptions = windowsExecutableResourceOptions;

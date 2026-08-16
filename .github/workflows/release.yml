@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.20.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate release tag
+        run: npm run release:validate
+
+      - name: Test
+        run: npm test
+
+      - name: Check syntax
+        run: npm run check
+
+      - name: Build and publish unsigned Windows release
+        if: env.CSC_LINK == ''
+        run: npm run dist -- --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build, sign, and publish Windows release
+        if: env.CSC_LINK != ''
+        run: npm run dist -- --publish always --config.win.signAndEditExecutable=true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

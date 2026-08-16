@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import path from 'node:path';
 import test from 'node:test';
 import { activateWindow, registerSingleInstance } from '../lib/app-lifecycle.js';
 import { DshHost, DshHostError } from '../lib/dsh-host.js';
@@ -85,6 +86,42 @@ test('starts DSH with a random loopback port and parses chunked readiness', asyn
   await Promise.all([host.stop(), host.stop()]);
   assert.equal(host.status, 'stopped');
   assert.equal(child.killed, true);
+});
+
+test('starts an archived runtime with its module loader and fixed archive environment', async () => {
+  let invocation;
+  const child = new FakeChild();
+  const host = new DshHost({
+    entryPath: 'C:/app/resources/dsh-runtime.asar/node_modules/@deepseek-ai/dsh/lib/bin.js',
+    moduleLoaderPath: 'C:/app/resources/app.asar/lib/runtime-loader-register.js',
+    runtimeArchivePath: 'C:/app/resources/dsh-runtime.asar',
+    spawnImpl: (...args) => { invocation = args; return child; },
+    platform: 'linux',
+    timeoutMs: 1000,
+  });
+
+  const starting = host.start('C:/workspace');
+  child.stdout.emit('data', 'dsh web: http://127.0.0.1:4123\n');
+  assert.equal(await starting, 'http://127.0.0.1:4123');
+  assert.deepEqual(invocation[1].slice(0, 4), [
+    '--expose-internals',
+    '--import',
+    'file:///C:/app/resources/app.asar/lib/runtime-loader-register.js',
+    'C:/app/resources/dsh-runtime.asar/node_modules/@deepseek-ai/dsh/lib/bin.js',
+  ]);
+  assert.equal(invocation[2].env.DSH_DESKTOP_RUNTIME_ARCHIVE, 'C:/app/resources/dsh-runtime.asar');
+  assert.equal(
+    invocation[2].env.NODE_PATH.split(path.delimiter)[0],
+    path.join('C:/app/resources/dsh-runtime.asar', 'node_modules'),
+  );
+  await host.stop();
+});
+
+test('requires archived runtime loader options as a pair', () => {
+  assert.throws(
+    () => new DshHost({ entryPath: 'dsh.js', moduleLoaderPath: 'loader.js' }),
+    /moduleLoaderPath and runtimeArchivePath together/,
+  );
 });
 
 test('rejects when the child exits before readiness and retains bounded diagnostics', async () => {

@@ -1,8 +1,9 @@
 {
   "name": "dsh-desktop",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A small, secure Electron shell for the DeepSeek Harness web UI.",
   "author": "DSH Desktop contributors",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "main": "main.js",
@@ -12,13 +13,16 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "check": "node --check main.js && node --check lib/app-lifecycle.js && node --check lib/dsh-host.js && node --check lib/navigation-policy.js && node --check scripts/before-pack.cjs && node --check scripts/after-pack.cjs",
+    "check": "node --check main.js && node --check lib/app-lifecycle.js && node --check lib/dsh-host.js && node --check lib/navigation-policy.js && node --check lib/runtime-loader-register.js && node --check lib/runtime-loader.js && node --check lib/update-controller.js && node --check scripts/before-pack.cjs && node --check scripts/after-pack.cjs && node --check scripts/validate-release.cjs",
+    "release:validate": "node scripts/validate-release.cjs",
     "dist": "electron-builder"
   },
   "devDependencies": {
     "@deepseek-ai/dsh": "0.1.0-rc.6",
-    "electron": "39.0.0",
-    "electron-builder": "26.0.12"
+    "@electron/asar": "^3.2.18",
+    "electron": "^39.8.10",
+    "electron-builder": "^26.15.3",
+    "rcedit": "^5.0.2"
   },
   "build": {
     "appId": "ai.deepseek.dsh.desktop",
@@ -32,19 +36,22 @@
       "lib/**/*",
       "scripts/**/*",
       "assets/**/*",
+      "LICENSE",
       "package.json"
     ],
     "icon": "assets/favicon.png",
     "extraResources": [
       {
-        "from": "runtime/node_modules",
-        "to": "dsh-runtime/node_modules",
+        "from": "runtime-archive",
+        "to": ".",
         "filter": [
-          "**/*"
+          "dsh-runtime.asar",
+          "dsh-runtime.asar.unpacked/**/*"
         ]
       }
     ],
     "win": {
+      "icon": "assets/favicon.png",
       "target": "nsis",
       "signAndEditExecutable": false
     },
@@ -55,6 +62,17 @@
     "linux": {
       "target": "AppImage",
       "category": "Development"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "kunge6702",
+        "repo": "dsh-desktop",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

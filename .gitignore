@@ -1,5 +1,6 @@
 node_modules/
 runtime/node_modules/
+runtime-archive/
 dist/
 release/
 *.log

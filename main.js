@@ -1,9 +1,13 @@
 import { app, BrowserWindow, dialog, Menu, nativeImage, Tray } from 'electron';
+import electronUpdater from 'electron-updater';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { activateWindow, registerSingleInstance } from './lib/app-lifecycle.js';
 import { DshHost, DshHostError } from './lib/dsh-host.js';
 import { installNavigationGuards } from './lib/navigation-policy.js';
+import { UpdateController } from './lib/update-controller.js';
+
+const { autoUpdater } = electronUpdater;
 
 const DSH_VERSION = '0.1.0-rc.6';
 const SETTINGS_FILE = 'settings.json';
@@ -18,6 +22,7 @@ let failurePromise = null;
 let shutdownPromise = null;
 let bootstrapPromise = null;
 let activationPromise = null;
+let updateState = { name: 'idle' };
 let quitting = false;
 
 function supportedNodeRuntime(version = process.versions.node) {
@@ -25,10 +30,15 @@ function supportedNodeRuntime(version = process.versions.node) {
   return major >= 24 || (major === 22 && minor >= 19);
 }
 
-function dshEntryPath() {
+function dshRuntimeOptions() {
   const relative = path.join('node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
-  if (app.isPackaged) return path.join(process.resourcesPath, 'dsh-runtime', relative);
-  return path.join(app.getAppPath(), relative);
+  if (!app.isPackaged) return { entryPath: path.join(app.getAppPath(), relative) };
+  const runtimeArchivePath = path.join(process.resourcesPath, 'dsh-runtime.asar');
+  return {
+    entryPath: path.join(runtimeArchivePath, relative),
+    moduleLoaderPath: path.join(app.getAppPath(), 'lib', 'runtime-loader-register.js'),
+    runtimeArchivePath,
+  };
 }
 
 function settingsPath() {
@@ -90,8 +100,22 @@ function updateTrayMenu() {
     { label: '选择工作区…', click: () => { void chooseWorkspace(); } },
     { label: '重启 DSH 服务', click: () => { void restartHost(); } },
     { type: 'separator' },
+    {
+      label: updateMenuLabel(),
+      enabled: !['checking', 'available', 'downloading'].includes(updateState.name),
+      click: () => { void updateController.check({ manual: true }); },
+    },
+    { type: 'separator' },
     { label: '退出', click: () => { void requestQuit(); } },
   ]));
+}
+
+function updateMenuLabel() {
+  if (updateState.name === 'checking') return '正在检查更新…';
+  if (updateState.name === 'available') return `发现版本 ${updateState.version}`;
+  if (updateState.name === 'downloading') return `正在下载更新… ${updateState.percent ?? 0}%`;
+  if (updateState.name === 'downloaded') return `安装更新 ${updateState.version}…`;
+  return '检查更新…';
 }
 
 function createTray() {
@@ -140,7 +164,7 @@ function createWindow() {
 }
 
 const host = new DshHost({
-  entryPath: dshEntryPath(),
+  ...dshRuntimeOptions(),
   logger: (stream, text) => {
     if (process.env.DSH_DESKTOP_DEBUG === '1') process.stderr.write(`[dsh:${stream}] ${text}`);
   },
@@ -154,6 +178,22 @@ host.on('exit', ({ intentional, code, signal }) => {
 
 host.on('child-error', (error) => {
   if (!quitting) void handleRuntimeFailure(error);
+});
+
+const updateController = new UpdateController({
+  updater: autoUpdater,
+  dialog,
+  isPackaged: app.isPackaged,
+  currentVersion: app.getVersion(),
+  getWindow: () => mainWindow,
+  prepareToInstall: prepareToInstallUpdate,
+  onStateChange: (state) => {
+    updateState = state;
+    updateTrayMenu();
+  },
+  logger: {
+    error: (message) => process.stderr.write(`${message}\n`),
+  },
 });
 
 async function startHostAndLoad({ forceRestart = false } = {}) {
@@ -273,6 +313,15 @@ async function requestQuit() {
   return shutdownPromise;
 }
 
+async function prepareToInstallUpdate() {
+  quitting = true;
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+  await host.stop();
+}
+
 async function bootstrap() {
   if (!supportedNodeRuntime()) {
     dialog.showErrorBox(
@@ -286,6 +335,7 @@ async function bootstrap() {
   createTray();
   try {
     await startHostAndLoad();
+    updateController.scheduleInitialCheck();
   } catch (error) {
     await showStartupError(error);
     await requestQuit();
